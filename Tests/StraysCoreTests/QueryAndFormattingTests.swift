@@ -67,6 +67,7 @@ struct FormattingTests {
         #expect(Formatting.origin(.terminal(tty: "ttys004", app: "Terminal")) == "Terminal tab ttys004")
         #expect(Formatting.origin(.terminal(tty: "ttys004", app: nil)) == "tab ttys004")
         #expect(Formatting.origin(.orphaned) == "no terminal (orphaned)")
+        #expect(Formatting.origin(.macOS) == "part of macOS")
         #expect(Formatting.origin(.launchd(label: "homebrew.mxcl.redis")) == "launchd: homebrew.mxcl.redis")
         #expect(Formatting.origin(.app(name: "Cursor")) == "started by Cursor")
         #expect(Formatting.origin(.agent(ProcIdentity(pid: 1, startMicros: 0), name: "Claude Code")) == "started by Claude Code")

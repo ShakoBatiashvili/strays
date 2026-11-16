@@ -76,6 +76,7 @@ struct StrayBuilderTests {
         #expect(system.map(\.root.pid) == [683, 1380])
         #expect(system.map(\.title) == ["ControlCenter", "GitHub Desktop"])
         #expect(system.first?.ports == [5000, 7000])
+        #expect(system.map(\.origin) == [.macOS, .application])
     }
 
     @Test func appHelpersOtherUsersAndSelfAreHidden() {

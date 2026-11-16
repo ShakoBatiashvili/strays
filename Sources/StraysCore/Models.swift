@@ -116,6 +116,10 @@ public enum Origin: Hashable, Codable, Sendable {
     case launchd(label: String)
     /// Its parent went away and launchd adopted it: nobody is watching this one.
     case orphaned
+    /// One of Apple's own processes.
+    case macOS
+    /// A GUI app in its own right (not something an app started).
+    case application
     case unknown
 }
 
@@ -124,6 +128,15 @@ public enum StrayKind: String, Codable, Sendable, CaseIterable {
     case agent        // an AI coding session (Claude Code, Codex, ...)
     case script       // a dev runtime without a port (watchers, workers, scripts)
     case system       // Apple or app processes that hold a port
+
+    public var singular: String {
+        switch self {
+        case .server: "server"
+        case .agent: "AI session"
+        case .script: "script"
+        case .system: "system / app"
+        }
+    }
 
     public var title: String {
         switch self {
@@ -238,6 +251,10 @@ public struct Stray: Hashable, Codable, Sendable, Identifiable {
 
     public var isStale: Bool { !tags.isEmpty }
 
-    /// The name a person recognises first.
-    public var title: String { project ?? command }
+    /// The name a person recognises first: the project, else the program ("postgres", "npm").
+    public var title: String {
+        if let project { return project }
+        if kind == .system { return command }
+        return command.split(separator: " ").first.map(String.init) ?? command
+    }
 }

@@ -121,11 +121,24 @@ public enum ProcessReader {
         return path.isEmpty ? nil : path
     }
 
+    /// devname() scans /dev on every call, so names are cached by device number (they never change).
+    private static var ttyCache: [UInt32: String] = [:]
+    private static let ttyLock = NSLock()
+
     private static func ttyName(_ dev: UInt32) -> String? {
         guard dev != UInt32.max, dev != 0 else { return nil }
-        guard let name = devname(dev_t(bitPattern: dev), S_IFCHR) else { return nil }
-        let s = String(cString: name)
-        return s.isEmpty || s == "??" ? nil : s
+        ttyLock.lock()
+        if let cached = ttyCache[dev] { ttyLock.unlock(); return cached.isEmpty ? nil : cached }
+        ttyLock.unlock()
+        var name = ""
+        if let raw = devname(dev_t(bitPattern: dev), S_IFCHR) {
+            let s = String(cString: raw)
+            if s != "??" { name = s }
+        }
+        ttyLock.lock()
+        ttyCache[dev] = name
+        ttyLock.unlock()
+        return name.isEmpty ? nil : name
     }
 
     /// TCP sockets in LISTEN state, read from the process's own file table.

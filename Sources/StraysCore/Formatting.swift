@@ -41,6 +41,8 @@ public enum Formatting {
         case .app(let name): "started by \(name)"
         case .launchd(let label): "launchd: \(label)"
         case .orphaned: "no terminal (orphaned)"
+        case .macOS: "part of macOS"
+        case .application: "app"
         case .unknown: "parent unknown"
         }
     }
@@ -100,5 +102,19 @@ public enum Filter {
         parts.append(Formatting.origin(stray.origin))
         parts.append(contentsOf: stray.helpers.map { $0.command })
         return parts.joined(separator: "\u{1}").lowercased()
+    }
+}
+
+/// Explanations for ports that macOS itself holds, which people often trip over.
+public enum PortHints {
+    public static func hint(port: UInt16, holder: Stray?) -> String? {
+        let isControlCenter = holder.map { $0.root.executableName == "ControlCenter" } ?? true
+        if (port == 5000 || port == 7000), isControlCenter {
+            return "That's macOS's AirPlay Receiver. To free :\(port), turn it off in System Settings > General > AirDrop & Handoff."
+        }
+        if let holder, holder.origin == .macOS {
+            return "That's part of macOS, so Strays won't stop it."
+        }
+        return nil
     }
 }

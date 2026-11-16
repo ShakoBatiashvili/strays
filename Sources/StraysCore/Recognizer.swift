@@ -108,7 +108,7 @@ public enum Recognizer {
 
     /// A short command a person recognises: "npm run dev", "uvicorn app:app", "chrome-devtools-mcp".
     public static func commandLabel(of record: ProcRecord) -> String {
-        truncate(rawLabel(of: record))
+        truncate(Redactor.redact(rawLabel(of: record)))
     }
 
     private static func rawLabel(of record: ProcRecord) -> String {

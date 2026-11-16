@@ -182,7 +182,8 @@ private struct Graph {
     }
 
     func origin(of root: ProcRecord, labels: [Int32: String]) -> Origin {
-        if Recognizer.isGUIApp(root), root.ppid <= 1 { return .app(name: Recognizer.appName(path: root.path) ?? root.name) }
+        if Recognizer.isAppleSystem(path: root.path) { return .macOS }
+        if Recognizer.isGUIApp(root), root.ppid <= 1 { return .application }
         guard root.ppid > 1, let parent = byPID[root.ppid] else {
             if let label = labels[root.pid] { return .launchd(label: label) }
             return root.ppid <= 1 ? .orphaned : .unknown

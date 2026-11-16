@@ -23,7 +23,9 @@ public enum LaunchdReader {
 /// Only `<pid>.json` status files are opened; the `.key` files next to them hold tokens and are never read.
 public final class ClaudeSessionReader: @unchecked Sendable {
     private let claudeDirectory: URL
-    private var titleCache: [String: (size: UInt64, modified: Date, title: String?)] = [:]
+    private var titleCache: [String: (size: UInt64, modified: Date, readAt: Date, title: String?)] = [:]
+    /// A busy session's transcript changes constantly; its title is re-read at most this often.
+    static let titleRefresh: TimeInterval = 60
     private let lock = NSLock()
     static let headBytes = 256 * 1024
     static let tailBytes = 512 * 1024
@@ -64,7 +66,8 @@ public final class ClaudeSessionReader: @unchecked Sendable {
         else { return nil }
 
         lock.lock()
-        if let cached = titleCache[url.path], cached.size == size, cached.modified == modified {
+        if let cached = titleCache[url.path],
+           (cached.size == size && cached.modified == modified) || Date().timeIntervalSince(cached.readAt) < Self.titleRefresh {
             lock.unlock()
             return cached.title
         }
@@ -72,7 +75,7 @@ public final class ClaudeSessionReader: @unchecked Sendable {
 
         let title = readTitle(url, size: size)
         lock.lock()
-        titleCache[url.path] = (size, modified, title)
+        titleCache[url.path] = (size, modified, Date(), title)
         lock.unlock()
         return title
     }
