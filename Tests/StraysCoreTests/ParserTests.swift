@@ -107,3 +107,36 @@ struct DockerParserTests {
         #expect(DockerAPI.parseResponse(Data("garbage".utf8)) == nil)
     }
 }
+
+struct DockerDedupTests {
+    func world(_ extra: [ProcRecord]) -> [Stray] {
+        StrayBuilder.build(Fixtures.world(records: Fixtures.records + extra), project: { _ in nil })
+    }
+
+    let engine = Fixtures.p(600, 1, "/Applications/Docker.app/Contents/MacOS/com.docker.backend", ["com.docker.backend"],
+                            cwd: "/", hoursAgo: 5, listen: [Fixtures.v4(5433, "*"), Fixtures.v4(6379, "*")])
+    let db = DockerContainer(id: "a1", name: "db", image: "postgres", state: "running", status: "Up", created: Fixtures.now,
+                             publishedPorts: [5433])
+    let redis = DockerContainer(id: "b2", name: "redis", image: "redis", state: "running", status: "Up", created: Fixtures.now,
+                                publishedPorts: [6379])
+
+    @Test func engineRowHiddenWhenContainersExplainItsPorts() {
+        let strays = world([engine])
+        #expect(strays.contains { $0.root.pid == 600 && $0.kind == .system })
+        #expect(!DockerDedup.hidePublished(strays, containers: [db, redis]).contains { $0.root.pid == 600 })
+    }
+
+    @Test func engineRowKeptWhenItHoldsOtherPorts() {
+        let strays = world([engine])
+        #expect(DockerDedup.hidePublished(strays, containers: [db]).contains { $0.root.pid == 600 })
+        #expect(DockerDedup.hidePublished(strays, containers: []).count == strays.count)
+    }
+
+    @Test func otherRowsAreNeverHidden() {
+        // A dev server on a port a container also publishes stays visible.
+        let strays = world([engine])
+        let clash = DockerContainer(id: "c3", name: "x", image: "x", state: "running", status: "Up", created: Fixtures.now,
+                                    publishedPorts: [5317, 5433, 6379])
+        #expect(DockerDedup.hidePublished(strays, containers: [clash]).contains { $0.root.pid == 45392 })
+    }
+}

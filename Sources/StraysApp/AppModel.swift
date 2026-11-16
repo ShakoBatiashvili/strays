@@ -153,7 +153,7 @@ final class AppModel {
         }.value
 
         now = result.now
-        strays = result.strays
+        strays = DockerDedup.hidePublished(result.strays, containers: result.containers ?? [])
         records = result.records
         processCount = result.records.count
         containers = result.containers ?? []

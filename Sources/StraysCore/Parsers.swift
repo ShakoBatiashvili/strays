@@ -126,3 +126,23 @@ public enum DockerAPI {
         return Response(status: status, body: Data(data[headerEnd.upperBound...]))
     }
 }
+
+public enum DockerDedup {
+    /// Docker's engine process holds every published port on the host. When the containers are
+    /// listed, those sockets are the containers', so the engine's own system row is hidden.
+    public static func hidePublished(_ strays: [Stray], containers: [DockerContainer]) -> [Stray] {
+        let published = Set(containers.flatMap(\.publishedPorts))
+        guard !published.isEmpty else { return strays }
+        return strays.filter { stray in
+            guard stray.kind == .system, isDockerEngine(stray.root) else { return true }
+            return !Set(stray.ports).isSubset(of: published)
+        }
+    }
+
+    static func isDockerEngine(_ record: ProcRecord) -> Bool {
+        let name = record.executableName
+        let app = Recognizer.appName(path: record.path)
+        return name.hasPrefix("com.docker.") || app == "Docker" || app == "OrbStack" || name == "vpnkit-bridge"
+            || name.hasPrefix("limactl") || name == "ssh" && record.arguments.contains { $0.contains("colima") }
+    }
+}

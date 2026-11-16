@@ -93,11 +93,13 @@ func run() -> Int32 {
         return 0
 
     case .list(let all, let json):
-        let rows = scanner.scan(settings: settings, activity: ActivityTracker(), now: now).strays.filter { all || $0.kind != .system }
+        let containers = dockerContainers()
+        let scanned = scanner.scan(settings: settings, activity: ActivityTracker(), now: now).strays
+        let rows = DockerDedup.hidePublished(scanned, containers: containers).filter { all || $0.kind != .system }
         if json {
             print(StrayJSON.encode(rows, now: now))
         } else {
-            print(colorize(TextReport.render(rows, now: now, containers: dockerContainers())))
+            print(colorize(TextReport.render(rows, now: now, containers: containers)))
         }
         return 0
 
