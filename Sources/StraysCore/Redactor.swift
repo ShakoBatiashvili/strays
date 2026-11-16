@@ -79,7 +79,8 @@ public enum Redactor {
                 if let eq = body.firstIndex(of: "=") {
                     let name = String(body[..<eq])
                     let value = String(body[body.index(after: eq)...])
-                    out.append(dashes + name + "=" + (isSecretName(name) ? mask : redactWord(value)))
+                    let masked = isSecretName(name) ? mask : redactWord(value)
+                    out.append(String(dashes) + name + "=" + masked)
                 } else {
                     if isSecretName(String(body)) { maskNextValue = true }
                     out.append(token)
