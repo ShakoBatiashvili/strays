@@ -148,6 +148,33 @@ struct StopperTests {
         #expect(outcome.succeeded)
     }
 
+    @Test func catchesAChildRespawnedDuringTheStop() throws {
+        // A supervisor that ignores SIGTERM and restarts its worker whenever it exits.
+        let marker = String(Int.random(in: 100_000...999_999))
+        let supervisor = """
+        import signal, subprocess, sys, time
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        print('ready', flush=True)
+        while True:
+            child = subprocess.Popen(['/bin/sleep', '\(marker)'])
+            child.wait()
+            time.sleep(0.05)
+        """
+        let helper = try Spawned(python, ["-c", supervisor])
+        #expect(helper.firstLine() == "ready")
+        Thread.sleep(forTimeInterval: 0.3)
+        let records = ProcessReader.snapshot()
+        let root = try #require(records.first { $0.pid == helper.pid })
+        let plan = StopPlanner.plan(roots: [root.identity], records: records, currentUID: getuid(), selfPID: getpid())
+        #expect(plan.targets.count == 2)
+
+        let outcome = Stopper.execute(plan, grace: 1)
+        #expect(outcome.succeeded)
+        Thread.sleep(forTimeInterval: 0.3)
+        let leftovers = ProcessReader.snapshot().filter { $0.arguments.contains(marker) }
+        #expect(leftovers.isEmpty, "respawned workers left running: \(leftovers.map(\.pid))")
+    }
+
     @Test func neverSignalsARecycledPID() throws {
         let helper = try Spawned("/bin/sleep", ["30"])
         var record = try #require(ProcessReader.record(pid: helper.pid))
@@ -283,5 +310,20 @@ struct LaunchdTests {
     @Test func readsRealLaunchdLabels() {
         // Every logged-in user has some running launchd jobs.
         #expect(LaunchdReader.labels().isEmpty == false)
+    }
+}
+
+struct UntrustedFilesTests {
+    @Test func aFIFOInTheSessionsFolderIsSkippedNotRead() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("strays-fifo-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let sessions = root.appendingPathComponent("sessions")
+        try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
+        let pid = getpid()
+        #expect(mkfifo(sessions.appendingPathComponent("\(pid).json").path, 0o600) == 0)
+        let me = try #require(ProcessReader.record(pid: pid))
+        let started = Date()
+        #expect(ClaudeSessionReader(claudeDirectory: root).sessions(alive: [pid: me]).isEmpty)
+        #expect(Date().timeIntervalSince(started) < 2)   // returned instead of blocking on the pipe
     }
 }

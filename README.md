@@ -32,8 +32,9 @@ stale, and a daily reminder (18:00 by default) lists what is still running.
 
 ## What it does
 
-- **Stop**: click ■, then confirm the inline "Stop 4" (it says how many processes). Strays sends `SIGTERM` to the
-  whole tree, top first, waits 5 s, then `SIGKILL`s whatever is left.
+- **Stop**: click ■, then confirm the inline "Stop 4": the count comes from the real plan, and it names what it
+  leaves running (another row, a terminal tab, an app). Strays freezes the tree so nothing can respawn, sends
+  `SIGTERM`, waits 5 s, then `SIGKILL`s whatever is left.
 - **Stop stale…**: one confirm for everything tagged orphaned, idle or old. *Stop everything in &lt;project&gt;* is in
   the right-click menu.
 - **Find a port**: type `:3000` (or `3000`, `localhost:3000`) in the filter to see who holds it, or that it is free.
@@ -88,7 +89,7 @@ cp -R "$(brew --prefix strays)/Strays.app" ~/Applications/ && open ~/Application
 
 ```sh
 git clone https://github.com/ShakoBatiashvili/strays.git && cd strays
-make test      # unit tests plus real-system tests (they start and stop their own throwaway processes)
+make test      # 106 unit and real-system tests (they start and stop their own throwaway processes)
 make app       # dist/Strays.app, ad-hoc signed
 make audit     # checks the safety claims below against the source and the built app
 make install   # copies it to ~/Applications
@@ -104,12 +105,15 @@ Strays is meant to be trusted with a Stop button, so it is deliberately small. D
 
 - **Never more than your own rights.** No root, no helper, no `sudo`. Other users' processes and macOS itself are
   never stopped (and Strays won't stop the session it runs in).
+- **Never more than the row.** A stop doesn't reach into terminal tabs, apps, other AI sessions or other rows; the
+  confirmation says what stays running.
 - **No recycled-PID accidents.** Every signal is preceded by a live check that the PID still has the same start
   time and owner it had when you clicked.
 - **No internet.** The only connections are to `localhost` (one `HEAD /` to see whether a port speaks HTTP) and to
   Docker's local unix socket. No telemetry, no updater.
 - **Secrets stay hidden.** API keys, tokens and passwords on command lines (`--api-key …`, `TOKEN=…`,
-  `postgres://user:pass@…`, `sk-…`, `ghp_…`, JWTs) are masked everywhere Strays shows or prints a command.
+  `postgres://user:pass@…`, `Bearer …`, `mysql -p…`, `sk-…`, `ghp_…`, JWTs, JSON bodies) are masked everywhere
+  Strays shows or prints a command. It is a best effort, not a guarantee.
 - **Read-only peeks at Claude Code.** It reads `~/.claude/sessions/<pid>.json` and the title lines of the session
   transcript; the token files beside them are never opened.
 - **No third-party code**, no private APIs, one fixed subprocess (`/bin/launchctl list`, to tell brew services from

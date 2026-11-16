@@ -59,11 +59,13 @@ public struct ProcRecord: Hashable, Codable, Sendable {
     public var cpuSeconds: Double
     public var residentBytes: UInt64
     public var listening: [ListeningSocket]
+    /// Leads its own session (setsid). With a controlling terminal, that is the shell of a terminal tab.
+    public var isSessionLeader: Bool
 
     public init(pid: Int32, ppid: Int32, uid: UInt32, name: String, path: String? = nil,
                 arguments: [String] = [], cwd: String? = nil, tty: String? = nil,
                 startMicros: Int64, cpuSeconds: Double = 0, residentBytes: UInt64 = 0,
-                listening: [ListeningSocket] = []) {
+                listening: [ListeningSocket] = [], isSessionLeader: Bool = false) {
         self.pid = pid
         self.ppid = ppid
         self.uid = uid
@@ -76,7 +78,11 @@ public struct ProcRecord: Hashable, Codable, Sendable {
         self.cpuSeconds = cpuSeconds
         self.residentBytes = residentBytes
         self.listening = listening
+        self.isSessionLeader = isSessionLeader
     }
+
+    /// The process a terminal tab runs first (its shell, or whatever the tab was told to run).
+    public var isTerminalSessionLeader: Bool { isSessionLeader && tty != nil }
 
     public var identity: ProcIdentity { ProcIdentity(pid: pid, startMicros: startMicros) }
     public var startDate: Date { Date(timeIntervalSince1970: Double(startMicros) / 1_000_000) }

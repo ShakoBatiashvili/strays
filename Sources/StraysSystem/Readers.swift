@@ -97,7 +97,7 @@ public final class ClaudeSessionReader: @unchecked Sendable {
 
     /// Reads only the head and tail of the transcript: titles repeat through the file.
     private func readTitle(_ url: URL, size: UInt64) -> String? {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        guard Self.isRegularFile(url), let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
         let head = (try? handle.read(upToCount: Self.headBytes)) ?? Data()
         var tail = Data()
@@ -110,8 +110,14 @@ public final class ClaudeSessionReader: @unchecked Sendable {
         return ClaudeSessions.title(in: text)
     }
 
+    /// Only plain files are opened: a FIFO or device planted in ~/.claude would block a read forever.
+    static func isRegularFile(_ url: URL) -> Bool {
+        var info = stat()
+        return lstat(url.path, &info) == 0 && (info.st_mode & S_IFMT) == S_IFREG
+    }
+
     private func readLimited(_ url: URL, max: Int) -> Data? {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        guard Self.isRegularFile(url), let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
         return try? handle.read(upToCount: max)
     }

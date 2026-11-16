@@ -29,18 +29,26 @@ public enum ProcessReader {
         allPIDs().compactMap { record(pid: $0, detailed: { $0 == uid }) }
     }
 
-    public static func record(pid: pid_t, detailed: (uid_t) -> Bool = { $0 == getuid() }) -> ProcRecord? {
+    /// Just the tree (parents, owners, start times, paths, arguments, ttys): what stopping needs, without the
+    /// expensive per-process sockets, folders and CPU times. Used to re-check a tree while it is being stopped.
+    public static func treeSnapshot(detailFor uid: uid_t = getuid()) -> [ProcRecord] {
+        allPIDs().compactMap { record(pid: $0, detailed: { $0 == uid }, resources: false) }
+    }
+
+    public static func record(pid: pid_t, detailed: (uid_t) -> Bool = { $0 == getuid() }, resources: Bool = true) -> ProcRecord? {
         var bsd = proc_bsdinfo()
         let bsdSize = Int32(MemoryLayout<proc_bsdinfo>.size)
         let hasBSD = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &bsd, bsdSize) == bsdSize
 
         let ppid: Int32, uid: UInt32, startMicros: Int64, tdev: UInt32
+        var sessionLeader = false
         var name: String
         if hasBSD {
             ppid = Int32(bsd.pbi_ppid)
             uid = bsd.pbi_uid
             startMicros = Int64(bsd.pbi_start_tvsec) * 1_000_000 + Int64(bsd.pbi_start_tvusec)
             tdev = bsd.e_tdev
+            sessionLeader = bsd.pbi_flags & UInt32(PROC_FLAG_SLEADER) != 0
             name = withUnsafeBytes(of: bsd.pbi_name) { cString($0) }
             if name.isEmpty { name = withUnsafeBytes(of: bsd.pbi_comm) { cString($0) } }
         } else {
@@ -55,12 +63,14 @@ public enum ProcessReader {
         }
 
         var record = ProcRecord(pid: pid, ppid: ppid, uid: uid, name: name, path: executablePath(pid: pid),
-                                startMicros: startMicros)
+                                startMicros: startMicros, isSessionLeader: sessionLeader)
+        // The tty is needed for everyone's processes: a root-owned `login` session leader is still a terminal boundary.
+        record.tty = ttyName(tdev)
         guard detailed(uid) else { return record }
 
         record.arguments = arguments(pid: pid)
+        guard resources else { return record }
         record.cwd = currentDirectory(pid: pid)
-        record.tty = ttyName(tdev)
         var task = proc_taskinfo()
         let taskSize = Int32(MemoryLayout<proc_taskinfo>.size)
         if proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &task, taskSize) == taskSize {

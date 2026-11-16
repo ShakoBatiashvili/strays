@@ -1,9 +1,13 @@
 import Foundation
 
 public enum Formatting {
+    /// Longest duration shown (about 31 years); anything larger is clamped, so bad input can't overflow.
+    public static let maxDuration: TimeInterval = 1_000_000_000
+
     /// "<1m", "12m", "1h 12m", "3d 9h", "12d".
     public static func duration(_ seconds: TimeInterval) -> String {
-        let total = Int(max(0, seconds))
+        guard seconds.isFinite else { return "<1m" }
+        let total = Int(min(max(0, seconds), maxDuration))
         let minutes = total / 60
         let hours = minutes / 60
         let days = hours / 24

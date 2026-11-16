@@ -18,7 +18,12 @@ enum Snapshot {
             ("list-light", { _ in }, .aqua),
             ("list-dark", { _ in }, .darkAqua),
             ("expanded-light", { m in m.expanded = [m.strays.first { $0.kind == .agent }!.id] }, .aqua),
-            ("bulk-dark", { m in m.confirmBulk("\(m.stale.count) stale", m.stale) }, .darkAqua),
+            ("bulk-dark", { m in
+                m.confirmBulk("\(m.stale.count) stale", m.stale)
+                let plan = StopPlanner.plan(roots: m.stale.map(\.id), records: Sample.world().records, currentUID: 501,
+                                            selfPID: 99_999, spare: StopPlanner.spare(selected: m.stale, among: m.strays))
+                m.bulkConfirm?.preview = StopPreview(plan: plan, rows: m.strays)
+            }, .darkAqua),
             ("filter-port-free-light", { m in m.filter = ":3999" }, .aqua),
             ("filter-port-dark", { m in m.filter = ":5317" }, .darkAqua),
             ("empty-light", { m in m.strays = []; m.containers = [] }, .aqua),

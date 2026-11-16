@@ -104,8 +104,16 @@ public enum CLI {
     /// Finds the row a target refers to. A bare number is a port or a PID, whichever matches.
     public static func resolve(_ target: StopTargetSpec, in strays: [Stray]) -> Resolution {
         func byPort(_ port: UInt16) -> Stray? { strays.first { $0.ports.contains(port) } }
+        /// The innermost row: a helper's PID finds the helper, not the session around it.
         func byPID(_ pid: Int32) -> Stray? {
-            strays.first { $0.allMembers.contains { $0.pid == pid } }
+            func search(_ rows: [Stray]) -> Stray? {
+                for row in rows {
+                    if let inner = search(row.helpers) { return inner }
+                    if row.members.contains(where: { $0.pid == pid }) { return row }
+                }
+                return nil
+            }
+            return search(strays)
         }
         switch target {
         case .port(let port):

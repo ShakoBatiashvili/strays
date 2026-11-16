@@ -41,31 +41,39 @@ func dockerContainers() -> [DockerContainer] {
     return (try? client.containers()) ?? []
 }
 
-func stop(_ rows: [Stray], records: [ProcRecord], yes: Bool) -> Int32 {
-    let plan = StopPlanner.plan(roots: rows.map(\.id), records: records, currentUID: getuid(), selfPID: getpid())
-    for refusal in plan.refused {
+func stop(_ rows: [Stray], among all: [Stray], records: [ProcRecord], yes: Bool) -> Int32 {
+    let spare = StopPlanner.spare(selected: rows, among: all)
+    let roots = rows.map(\.id)
+    let preview = StopPreview(plan: StopPlanner.plan(roots: roots, records: records, currentUID: getuid(), selfPID: getpid(),
+                                                     spare: spare), rows: all)
+    for refusal in preview.plan.refused {
         let name = rows.first { $0.id == refusal.identity }?.title ?? "pid \(refusal.identity.pid)"
         printError("won't stop \(name): \(refusal.reason.message)")
     }
-    guard !plan.targets.isEmpty else { return 1 }
+    guard !preview.plan.targets.isEmpty else { return 1 }
 
-    let names = rows.filter { row in plan.targets.contains { $0.pid == row.root.pid } }
+    let names = rows.filter { row in preview.plan.targets.contains { $0.pid == row.root.pid } }
         .map { row in row.ports.isEmpty ? row.title : "\(row.title) \(Formatting.ports(row.ports))" }
-    print("Will stop \(names.joined(separator: ", ")): \(plan.summary)")
-    for target in plan.targets { print("  \(target.pid)  \(Recognizer.commandLabel(of: target))") }
-    if !plan.skipped.isEmpty { print("  (leaving \(plan.skipped.count) process(es) owned by other users alone)") }
+    print("Will stop \(names.joined(separator: ", ")): \(preview.plan.summary)")
+    for target in preview.plan.targets { print("  \(target.pid)  \(Recognizer.commandLabel(of: target))") }
+    if !preview.leftRunning.isEmpty { print("Leaves running: " + preview.leftRunning.joined(separator: ", ")) }
+    if !preview.plan.skipped.isEmpty { print("Leaves alone \(preview.plan.skipped.count) process(es) owned by other users.") }
 
     if !yes {
         guard isatty(STDIN_FILENO) == 1 else {
             printError("not a terminal, so not asking: add -y to stop without confirmation")
             return 1
         }
-        guard confirm("Stop \(plan.summary)?") else { print("Nothing stopped."); return 1 }
+        guard confirm("Stop \(preview.plan.summary)?") else { print("Nothing stopped."); return 1 }
     }
 
-    let outcome = Stopper.execute(plan, grace: settings.stopGraceSeconds)
-    var message = "Stopped \(outcome.stoppedCount) of \(plan.targets.count)."
+    // Plan again from a fresh snapshot: the tree may have changed while you read the list.
+    let plan = StopPlanner.plan(roots: roots, records: ProcessReader.treeSnapshot(), currentUID: getuid(), selfPID: getpid(),
+                                spare: spare)
+    let outcome = Stopper.execute(plan, grace: settings.stopGraceSeconds, spare: spare)
+    var message = "Stopped \(outcome.stoppedCount) of \(plan.targets.count + outcome.lateArrivals.count)."
     if !outcome.killed.isEmpty { message += " \(outcome.killed.count) ignored SIGTERM and were killed." }
+    if !outcome.lateArrivals.isEmpty { message += " \(outcome.lateArrivals.count) appeared during the stop and were stopped too." }
     print(message)
     if !outcome.failed.isEmpty {
         printError("still running: " + outcome.failed.map(String.init).joined(separator: ", "))
@@ -81,6 +89,16 @@ func run() -> Int32 {
     } catch {
         printError("\(error)")
         return 2
+    }
+
+    // Under sudo, "your processes" would mean root's: Strays is only meant to stop what you started.
+    if getuid() == 0 {
+        switch command {
+        case .stop, .stale(stop: true, _, _):
+            printError("run strays as yourself, not with sudo: it only stops your own processes")
+            return 2
+        default: break
+        }
     }
 
     switch command {
@@ -141,7 +159,7 @@ func run() -> Int32 {
                 return 1
             }
         }
-        return stop(rows, records: scan.records, yes: yes)
+        return stop(rows, among: scan.strays, records: scan.records, yes: yes)
 
     case .stale(let stopThem, let yes, let json):
         let scan = scanner.scan(settings: settings, activity: ActivityTracker(), now: now)
@@ -151,7 +169,7 @@ func run() -> Int32 {
         print(colorize(TextReport.render(rows, now: now)))
         guard stopThem else { return 0 }
         print("")
-        return stop(rows, records: scan.records, yes: yes)
+        return stop(rows, among: scan.strays, records: scan.records, yes: yes)
     }
 }
 

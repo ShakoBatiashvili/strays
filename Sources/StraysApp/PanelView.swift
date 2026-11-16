@@ -294,7 +294,7 @@ private struct BulkConfirmView: View {
     let bulk: AppModel.BulkConfirm
 
     var body: some View {
-        let processes = bulk.strays.reduce(0) { $0 + $1.allMembers.count }
+        let processes = bulk.preview?.processCount ?? bulk.strays.reduce(0) { $0 + $1.allMembers.count }
         VStack(alignment: .leading, spacing: 8) {
             Text("Stop \(bulk.label)?").font(.headline)
             VStack(alignment: .leading, spacing: 3) {
@@ -312,6 +312,9 @@ private struct BulkConfirmView: View {
                     Text("and \(bulk.strays.count - 6) more").font(.caption).foregroundStyle(.secondary)
                 }
             }
+            if let left = bulk.preview?.leftRunning, !left.isEmpty {
+                Text("Leaves running: " + left.joined(separator: ", ")).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+            }
             HStack {
                 Text("\(processes) processes, SIGTERM then SIGKILL after \(Int(model.settings.stopGraceSeconds)) s")
                     .font(.caption2).foregroundStyle(.secondary)
@@ -320,6 +323,7 @@ private struct BulkConfirmView: View {
                     .keyboardShortcut(.cancelAction)
                 Button("Stop \(bulk.strays.count)") { model.stop(bulk.strays, label: bulk.label) }
                     .buttonStyle(DangerButtonStyle())
+                    .disabled(model.isLive && bulk.preview == nil)
             }
             .controlSize(.small)
         }

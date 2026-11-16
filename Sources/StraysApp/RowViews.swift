@@ -12,6 +12,7 @@ struct StrayRow: View {
     @State private var hovering = false
     @State private var confirming = false
     @State private var confirmTask: Task<Void, Never>?
+    @State private var preview: StopPreview?
 
     private var expanded: Bool { model.expanded.contains(stray.id) }
     private var isStopping: Bool { model.stopping.contains(stray.id) }
@@ -152,17 +153,30 @@ struct StrayRow: View {
     }
 
     private var confirmStrip: some View {
-        let count = stray.allMembers.count
-        return HStack(spacing: 8) {
-            Text(count > 1 ? "Stop \(stray.title) and the \(count - 1) process\(count == 2 ? "" : "es") it started?" : "Stop \(stray.title)?")
+        let count = preview?.processCount
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Group {
+                    if let count {
+                        Text(count == 1 ? "Stop \(stray.title)? 1 process." : "Stop \(stray.title)? \(count) processes.")
+                    } else {
+                        Text("Stop \(stray.title)?")
+                    }
+                }
                 .font(.caption).lineLimit(2)
-            Spacer()
-            Button("Keep running") { cancelConfirm() }.keyboardShortcut(.cancelAction)
-            Button(count > 1 ? "Stop \(count)" : "Stop") {
-                cancelConfirm()
-                model.stop([stray], label: stray.title)
+                Spacer()
+                Button("Keep running") { cancelConfirm() }.keyboardShortcut(.cancelAction)
+                Button(count.map { $0 > 1 ? "Stop \($0)" : "Stop" } ?? "Stop") {
+                    cancelConfirm()
+                    model.stop([stray], label: stray.title)
+                }
+                .buttonStyle(DangerButtonStyle())
+                .disabled(model.isLive && preview == nil)
             }
-            .buttonStyle(DangerButtonStyle())
+            if let left = preview?.leftRunning, !left.isEmpty {
+                Text("Leaves running: " + left.joined(separator: ", "))
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(2)
+            }
         }
         .controlSize(.small)
         .padding(.horizontal, 12)
@@ -180,9 +194,12 @@ struct StrayRow: View {
     private func askToStop() {
         guard !isStopping else { return }
         confirming = true
+        preview = nil
         confirmTask?.cancel()
         confirmTask = Task {
-            try? await Task.sleep(for: .seconds(6))
+            // The real plan, from a fresh snapshot: the count shown is the count that will be signalled.
+            if model.isLive { preview = await model.preview([stray]) }
+            try? await Task.sleep(for: .seconds(8))
             if !Task.isCancelled { confirming = false }
         }
     }
@@ -299,7 +316,8 @@ struct CopyItems: View {
         Button("Copy full command line") { Actions.copy(stray.root.arguments.joined(separator: " ")) }
         if let path = stray.projectPath { Button("Copy folder path") { Actions.copy(path) } }
         Button("Copy stop command") {
-            Actions.copy(stray.ports.first.map { "strays stop :\($0)" } ?? "strays stop pid:\(stray.root.pid)")
+            // pid: always resolves to exactly this row (helpers included); a port could belong to a parent row.
+            Actions.copy("strays stop pid:\(stray.root.pid)")
         }
     }
 }
@@ -326,8 +344,9 @@ private struct RowMenu: View {
         }
         if stray.origin != .macOS {
             Divider()
-            if let project = stray.project {
-                let siblings = model.strays.filter { $0.project == project && $0.kind != .system }
+            if let project = stray.project, let folder = stray.projectPath {
+                // Same folder, not just the same name: two repos called "api" are different projects.
+                let siblings = model.strays.filter { $0.projectPath == folder && $0.kind != .system }
                 if siblings.count > 1 {
                     Button("Stop everything in \(project) (\(siblings.count))…") { model.confirmBulk("everything in \(project)", siblings) }
                 }

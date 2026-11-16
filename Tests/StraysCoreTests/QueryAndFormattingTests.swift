@@ -50,6 +50,14 @@ struct FormattingTests {
         #expect(Formatting.duration(seconds) == expected)
     }
 
+    @Test func absurdDurationsDoNotCrash() {
+        #expect(Formatting.duration(.infinity) == "<1m")
+        #expect(Formatting.duration(-.infinity) == "<1m")
+        #expect(Formatting.duration(.nan) == "<1m")
+        #expect(Formatting.duration(1e300) == Formatting.duration(Formatting.maxDuration))
+        #expect(Formatting.duration(-1e300) == "<1m")
+    }
+
     @Test func bytes() {
         #expect(Formatting.bytes(0) == "0 MB")
         #expect(Formatting.bytes(512_000) == "0.5 MB")

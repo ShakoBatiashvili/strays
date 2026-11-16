@@ -45,8 +45,11 @@ belongs to the row, so `npm start → sh -c → tsx → node` is one row named a
 
 ## Stopping
 
-- **Graceful, whole tree**: `SIGTERM` root first then level by level (so supervisors don't restart children),
-  `SIGKILL` after 5 s.
+- **Graceful, whole row**: the row's tree, but never across a boundary: terminal tabs (session leaders with a tty,
+  shells not clearly running a command), apps, other AI sessions, macOS, other users, and other rows that were not
+  selected. Freeze with `SIGSTOP` (re-scanning until nothing new appears), `SIGTERM`, `SIGCONT`, wait, pick up
+  anything respawned, then freeze and `SIGKILL` survivors after 5 s.
+- **The confirmation shows the real plan** (counted from a fresh snapshot) and names what it leaves running.
 - **Inline two-click confirm** that names the count ("Stop 4"), no modal dialog. There is no undo for a killed
   process, so the friction is proportional: one extra click, and the strip disarms itself after 6 s.
 - Bulk *Stop stale…* and *Stop everything in &lt;project&gt;* show the list before the one confirm.
@@ -57,6 +60,13 @@ Open in browser (only for ports that answered a `HEAD /` with HTTP), show the te
 AppleScript, by tty), open the project in Cursor (or VS Code, Zed, Xcode), copy menu, port lookup in the filter
 (`:3000` shows the holder or "free"), daily reminder at 18:00, global shortcut ⌃⌥P, open at login, Docker
 containers over the local socket.
+
+## Found in the pre-release review (and fixed)
+
+An independent review before v0.1.0 found that a stop could reach further than its row (an editor's integrated
+terminal, a server listed separately), that unknown shells (pwsh, nix's `bash --rcfile`, xonsh) could be grouped
+into a row, several redaction gaps, a helper's "copy stop command" resolving to its whole session, a respawn race,
+a crash on absurd timestamps, a hang on a FIFO, and audit checks weaker than the docs. Each has a test now.
 
 ## Deliberately not done
 

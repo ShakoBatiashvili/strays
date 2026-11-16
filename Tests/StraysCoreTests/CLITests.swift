@@ -40,7 +40,10 @@ struct CLIResolveTests {
     @Test func portsAndPIDs() {
         #expect(CLI.resolve(.port(5317), in: strays) == .found(strays.first { $0.root.pid == 45392 }!))
         #expect(CLI.resolve(.pid(45583), in: strays) == .found(strays.first { $0.root.pid == 45392 }!))
-        #expect(CLI.resolve(.pid(63951), in: strays) == .found(strays.first { $0.root.pid == 63937 }!))   // a helper's process
+        // A helper's process resolves to the helper, not to the whole session.
+        let session = strays.first { $0.root.pid == 63937 }!
+        #expect(CLI.resolve(.pid(63951), in: strays) == .found(session.helpers.first { $0.root.pid == 63950 }!))
+        #expect(CLI.resolve(.pid(63937), in: strays) == .found(session))
         if case .notFound = CLI.resolve(.port(3000), in: strays) {} else { Issue.record("expected notFound") }
     }
 

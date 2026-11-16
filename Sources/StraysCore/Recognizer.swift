@@ -54,7 +54,8 @@ public enum Recognizer {
     private static let agentNames: [String: Runtime] = [
         "claude": .claude, "codex": .codex, "gemini": .gemini, "aider": .aider, "opencode": .opencode,
     ]
-    private static let shells: Set<String> = ["zsh", "bash", "sh", "fish", "dash", "tcsh", "ksh", "csh", "nu"]
+    static let shells: Set<String> = ["zsh", "bash", "sh", "fish", "dash", "tcsh", "ksh", "csh", "nu", "pwsh", "elvish", "xonsh",
+                                      "ion", "osh", "ysh", "oil", "mksh", "oksh", "yash", "rc", "es", "murex"]
 
     public static func runtime(of record: ProcRecord) -> Runtime {
         let exe = record.executableName
@@ -66,11 +67,11 @@ public enum Recognizer {
         if let agent = agentNames[exe] ?? agentNames[launch] { return agent }
 
         let interpreter = interpreterRuntime(exe: exe, launch: launch, path: path)
-        // ... or scripts run by an interpreter (gemini via node, aider via python).
+        // ... or scripts run by an interpreter (gemini via node, aider via python). Some shells are scripts too (xonsh).
         if let interpreter, interpreter == .node || interpreter == .python || interpreter == .bun,
-           let script = scriptArgument(record, interpreter: interpreter),
-           let agent = agentNames[basename(script)] {
-            return agent
+           let script = scriptArgument(record, interpreter: interpreter) {
+            if let agent = agentNames[basename(script)] { return agent }
+            if shells.contains(basename(script)) { return .shell }
         }
         if let interpreter { return interpreter }
 
@@ -284,13 +285,38 @@ public enum Recognizer {
         return !runtime(of: record).isDevRuntime
     }
 
-    /// A shell a person types into, which is where "what I started" begins.
+    /// Options whose next argument is a value, not a script to run.
+    private static let shellOptionsWithValue: Set<String> = [
+        "--rcfile", "--init-file", "-o", "+o", "-O", "+O", "--config", "--env-config", "--login-file", "-ConfigurationName",
+        "-WorkingDirectory", "-wd", "-ExecutionPolicy", "-ex", "-SettingsFile", "--plugin-config",
+    ]
+
+    /// A shell a person types into, which is where "what I started" begins. Anything that is not clearly
+    /// running a command or a script counts as interactive: erring this way keeps shells out of rows.
     public static func isInteractiveShell(_ record: ProcRecord) -> Bool {
         guard runtime(of: record) == .shell else { return false }
-        if record.isLoginShell { return true }
-        let rest = record.arguments.dropFirst()
-        // `zsh -c "…"` or `zsh script.sh` run something; bare `zsh`/`zsh -il` is interactive.
-        return rest.allSatisfy { $0.hasPrefix("-") && $0 != "-c" }
+        if record.isLoginShell || record.isTerminalSessionLeader { return true }
+        var args = Array(record.arguments.dropFirst())
+        // xonsh runs as `python …/xonsh`: look at the shell's own arguments.
+        if let shellIndex = args.firstIndex(where: { shells.contains(basename($0)) }) { args = Array(args[(shellIndex + 1)...]) }
+        var i = 0
+        while i < args.count {
+            let arg = args[i]
+            let lower = arg.lowercased()
+            // -c (sh, zsh, bash, fish, nu), -Command / -File / -EncodedCommand (pwsh), --commands (nu).
+            if ["-c", "-command", "--command", "--commands", "-encodedcommand", "-file"].contains(lower) { return false }
+            // Combined short flags such as -lc or -ic run a command too.
+            if arg.hasPrefix("-"), !arg.hasPrefix("--"), arg.count > 2, arg.dropFirst().contains("c") { return false }
+            if shellOptionsWithValue.contains(arg) { i += 2; continue }
+            if arg.hasPrefix("-") || arg.hasPrefix("+") { i += 1; continue }
+            return false   // an operand: a script file
+        }
+        return true
+    }
+
+    /// Where a terminal tab begins: its session leader, an interactive shell, or a multiplexer.
+    public static func isTerminalBoundary(_ record: ProcRecord) -> Bool {
+        record.isTerminalSessionLeader || isInteractiveShell(record) || isMultiplexer(record)
     }
 
     /// Terminal multiplexers keep running after the tab closes; treat them like terminals.

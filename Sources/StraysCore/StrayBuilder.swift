@@ -141,8 +141,7 @@ private struct Graph {
             || r.uid != world.currentUID
             || Recognizer.isGUIApp(r)
             || Recognizer.isAppleSystem(path: r.path)
-            || Recognizer.isInteractiveShell(r)
-            || Recognizer.isMultiplexer(r)
+            || Recognizer.isTerminalBoundary(r)
             || r.executableName == "login" || r.executableName == "sshd"
     }
 
@@ -192,7 +191,7 @@ private struct Graph {
         if parentRuntime.isAgent {
             return .agent(parent.identity, name: parentRuntime.displayName)
         }
-        if Recognizer.isInteractiveShell(parent) || Recognizer.isMultiplexer(parent) {
+        if Recognizer.isTerminalBoundary(parent) {
             guard let tty = root.tty ?? parent.tty else { return .unknown }
             return .terminal(tty: tty, app: terminalApp(above: parent))
         }
@@ -205,6 +204,7 @@ private struct Graph {
     /// The app that owns a terminal tab: the first GUI app (or multiplexer) above the shell.
     private func terminalApp(above shell: ProcRecord) -> String? {
         if Recognizer.isMultiplexer(shell) { return shell.launchName ?? shell.executableName }
+        if Recognizer.isGUIApp(shell) { return Recognizer.appName(path: shell.path) }
         var current = byPID[shell.ppid]
         var hops = 0
         while let c = current, hops < 16 {

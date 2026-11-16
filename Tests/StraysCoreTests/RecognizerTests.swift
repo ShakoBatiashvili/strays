@@ -26,6 +26,10 @@ struct RuntimeTests {
         (proc("/Users/dev/code/acme/target/debug/acme-server", ["acme-server"]), .rust),
         (proc("/bin/zsh", ["-zsh"]), .shell),
         (proc("/bin/sh", ["sh", "-c", "vite build"]), .shell),
+        (proc("/opt/homebrew/bin/pwsh", ["-pwsh"]), .shell),
+        (proc("/opt/homebrew/bin/nu", ["nu", "--config", "/Users/dev/.config/nu/config.nu"]), .shell),
+        (proc("/opt/homebrew/bin/elvish", ["elvish"]), .shell),
+        (proc("/opt/homebrew/Cellar/xonsh/0.19/libexec/bin/python3.12", ["python3.12", "/opt/homebrew/bin/xonsh"]), .shell),
         (proc("/Users/dev/.local/share/claude/versions/2.1.319", ["claude"], name: "2.1.319"), .claude),
         (proc("/Users/dev/.local/bin/claude", ["/Users/dev/.local/bin/claude", "--chrome-native-host"]), .claude),
         (proc("/opt/homebrew/bin/codex", ["codex"]), .codex),
@@ -137,5 +141,24 @@ struct ProcessKindTests {
         #expect(!Recognizer.isInteractiveShell(proc("/bin/zsh", ["/bin/zsh", "-c", "npm run dev"])))
         #expect(!Recognizer.isInteractiveShell(proc("/bin/zsh", ["zsh", "script.sh"])))
         #expect(!Recognizer.isInteractiveShell(proc(brewNode, ["node"])))
+        #expect(!Recognizer.isInteractiveShell(proc("/bin/zsh", ["zsh", "-lc", "npm run dev"])))
+        #expect(!Recognizer.isInteractiveShell(proc("/bin/bash", ["bash", "-ic", "make"])))
+    }
+
+    @Test func shellsPeopleTypeInto() {
+        // Login shells of any kind, shells with only options, and option values that look like operands.
+        #expect(Recognizer.isInteractiveShell(proc("/opt/homebrew/bin/pwsh", ["-pwsh"])))
+        #expect(Recognizer.isInteractiveShell(proc("/bin/bash", ["bash", "--rcfile", "/tmp/nix-shell.abc"])))
+        #expect(Recognizer.isInteractiveShell(proc("/opt/homebrew/bin/nu", ["nu", "--config", "/Users/dev/.config/nu/config.nu"])))
+        #expect(Recognizer.isInteractiveShell(proc("/opt/homebrew/bin/fish", ["fish", "-l"])))
+        #expect(!Recognizer.isInteractiveShell(proc("/opt/homebrew/bin/pwsh", ["pwsh", "-Command", "Get-Date"])))
+        #expect(!Recognizer.isInteractiveShell(proc("/opt/homebrew/bin/nu", ["nu", "--commands", "ls"])))
+        // Whatever leads a terminal session is the tab's own process, whatever it is.
+        var leader = proc("/opt/homebrew/bin/some-shell", ["some-shell"])
+        leader.isSessionLeader = true
+        leader.tty = "ttys009"
+        #expect(Recognizer.isTerminalBoundary(leader))
+        leader.tty = nil
+        #expect(!Recognizer.isTerminalBoundary(leader))     // a daemon that called setsid() is not a tab
     }
 }

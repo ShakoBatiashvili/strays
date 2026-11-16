@@ -127,6 +127,7 @@ enum Actions {
         switch appName {
         case "Terminal":
             script = """
+            with timeout of 3 seconds
             tell application id "com.apple.Terminal"
               repeat with w in windows
                 repeat with t in tabs of w
@@ -139,9 +140,11 @@ enum Actions {
               end repeat
               activate
             end tell
+            end timeout
             """
         case "iTerm2", "iTerm":
             script = """
+            with timeout of 3 seconds
             tell application id "com.googlecode.iterm2"
               repeat with w in windows
                 repeat with t in tabs of w
@@ -156,6 +159,7 @@ enum Actions {
               end repeat
               activate
             end tell
+            end timeout
             """
         default:
             return activate(appName)
