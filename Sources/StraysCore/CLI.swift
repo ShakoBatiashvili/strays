@@ -32,7 +32,7 @@ public enum CLIError: Error, Equatable, CustomStringConvertible {
 }
 
 public enum CLI {
-    public static let version = "0.1.0"
+    public static let version = "0.1.1"
 
     public static let usage = """
     strays \(version): see and stop the dev servers, AI sessions and scripts you left running.

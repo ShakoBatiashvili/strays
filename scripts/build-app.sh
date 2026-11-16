@@ -4,8 +4,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="0.1.0"
-BUILD="1"
+VERSION="0.1.1"
+BUILD="2"
 APP="dist/Strays.app"
 BUNDLE_ID="io.github.shakobatiashvili.strays"
 

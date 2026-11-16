@@ -63,7 +63,7 @@ containers over the local socket.
 
 ## Found in the pre-release review (and fixed)
 
-An independent review before v0.1.0 found that a stop could reach further than its row (an editor's integrated
+An independent review before the first release found that a stop could reach further than its row (an editor's integrated
 terminal, a server listed separately), that unknown shells (pwsh, nix's `bash --rcfile`, xonsh) could be grouped
 into a row, several redaction gaps, a helper's "copy stop command" resolving to its whole session, a respawn race,
 a crash on absurd timestamps, a hang on a FIFO, and audit checks weaker than the docs. Each has a test now.
